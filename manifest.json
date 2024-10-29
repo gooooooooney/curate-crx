@@ -1,0 +1,12 @@
+{
+  "permissions": [
+    "cookies",
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://*.clerk.com/*"
+  ]
+} 
