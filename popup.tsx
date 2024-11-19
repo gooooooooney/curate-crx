@@ -7,6 +7,8 @@ import type { User } from "~storage/auth"
 import { getUser } from "~storage/auth"
 
 function IndexPopup() {
+
+  const API_URL = `${process.env.PLASMO_PUBLIC_BASE_URL}/api/v3`
   const [user, setUser] = useState<User | null>(null)
   const [itemId, setItemId] = useState<string | null>(null)
   const [pageInfo, setPageInfo] = useState<PageInfo | null>(null)
@@ -58,7 +60,7 @@ function IndexPopup() {
   }
 
   const saveToBackend = (data: PageInfo) => {
-    return fetch("http://localhost:3000/api/v1/item", {
+    return fetch(`${API_URL}/items`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -84,7 +86,7 @@ function IndexPopup() {
     if (!pageInfo || !user) return
     setLoading(true)
     try {
-      const response = await fetch("http://localhost:3000/api/v1/item", {
+      const response = await fetch(`${API_URL}/items`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -107,7 +109,7 @@ function IndexPopup() {
   if (!user) {
     return (
       <div style={{ padding: 16 }}>
-        <Button type="primary" onClick={() => window.open("http://localhost:3000/sign-in")}>
+        <Button type="primary" onClick={() => window.open(`${process.env.PLASMO_PUBLIC_BASE_URL}/sign-in`)}>
           请先登录
         </Button>
       </div>
