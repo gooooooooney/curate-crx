@@ -1,8 +1,8 @@
 {
-  "name": "curate-crx",
-  "displayName": "Curate crx",
+  "name": "curate-hub",
+  "displayName": "CurateHub",
   "version": "0.0.1",
-  "description": "add url to bookmark",
+  "description": "CurateHub is the ultimate platform for content curation and management.Organize, discover, and share your favorite content with ease",
   "author": "gooney",
   "scripts": {
     "dev": "plasmo dev",
