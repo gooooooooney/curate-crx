@@ -1,9 +1,9 @@
 import type { User } from "~storage/auth"
 
-// 监听来自网站的登录消息
+// 监听来自主站的登录状态
 window.addEventListener("message", async (event) => {
-  // 确保消息来自您的网站域名
-  if (event.origin !== "http://localhost:3000") return
+  // 确保消息来自您的主站域名
+  if (event.origin !== process.env.PLASMO_PUBLIC_BASE_URL) return
 
   if (event.data.type === "LOGIN_SUCCESS") {
     const user: User = event.data.user

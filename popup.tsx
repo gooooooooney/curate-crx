@@ -6,13 +6,35 @@ import { getPageInfo } from "~services/page"
 import type { User } from "~storage/auth"
 import { getUser } from "~storage/auth"
 
+function getAbsoluteUrl(url: URL, relativeUrl: string): string {
+  if (!relativeUrl) return '';
+  
+  // 如果已经是绝对路径，直接返回
+  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
+    return relativeUrl;
+  }
+  
+  // 如果是以 // 开头的协议相对路径
+  if (relativeUrl.startsWith('//')) {
+    return url.protocol + relativeUrl;
+  }
+  
+  // 如果是以 / 开头的绝对路径
+  if (relativeUrl.startsWith('/')) {
+    return `${url.origin}${relativeUrl}`;
+  }
+  
+  // 处理相对路径
+  return `${url.origin}/${relativeUrl}`;
+}
+
 function IndexPopup() {
 
   const API_URL = `${process.env.PLASMO_PUBLIC_BASE_URL}/api/v3`
   const [user, setUser] = useState<User | null>(null)
   const [itemId, setItemId] = useState<string | null>(null)
   const [pageInfo, setPageInfo] = useState<PageInfo | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
@@ -26,10 +48,30 @@ function IndexPopup() {
   }, [user])
 
   const checkAuth = async () => {
-    const userData = await getUser()
-    if (userData) {
-      setUser(userData)
+    setLoading(true)
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      const domain = process.env.PLASMO_PUBLIC_BASE_URL
 
+      const cookies = await chrome.cookies.get({
+        url: domain,
+        name: "__session"
+      })
+
+      if (!cookies?.value) {
+        window.open(`${domain}/sign-in`, "_blank")
+        window.close()
+        return
+      }
+
+      const userData = await getUser()
+      if (userData) {
+        setUser(userData)
+      }
+    } catch (err) {
+      console.error("Auth check failed:", err)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -37,26 +79,48 @@ function IndexPopup() {
     setLoading(true)
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      if (tab.id) {
-        const info = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: getPageInfo
-        })
-        const pageData = info[0].result
-        setPageInfo(pageData)
-        if (!saved) {
-          const res = await saveToBackend(pageData)
-          console.log(res)
-          if (res) {
-            setSaved(true)
-          }
+
+      if (!tab.id) {
+        throw new Error("No tab id found")
+      }
+
+      if (!tab.url) {
+        throw new Error("No URL found")
+      }
+
+      // 检查是否是有效的 URL
+      if (!tab.url.startsWith('http')) {
+        throw new Error("Invalid URL protocol")
+      }
+
+      const info = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: getPageInfo
+      })
+
+      
+      const pageData = info[0].result
+      const url = new URL(tab.url)
+      const pageInfo = {
+        ...pageData,
+        image: getAbsoluteUrl(url, pageData.image),
+        title: tab.title,
+        url: tab.url,
+        favicon: getAbsoluteUrl(url, tab.favIconUrl)
+      };
+      setPageInfo(pageInfo)
+      if (!saved) {
+        const res = await saveToBackend(pageInfo)
+        if (res) {
+          setSaved(true)
         }
       }
     } catch (err) {
-      console.error(err)
-      message.error("获取页面信息失败")
+      console.error("Error in fetchPageInfo:", err)
+      message.error(`获取页面信息失败: ${err.message}`)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const saveToBackend = (data: PageInfo) => {
@@ -71,7 +135,6 @@ function IndexPopup() {
       .then(res => res.json())
       .then(res => {
         setItemId(res.data.id)
-        console.log(res)
         message.success("保存成功")
         return true
       })
@@ -106,10 +169,16 @@ function IndexPopup() {
     setLoading(false)
   }
 
+  if (loading) {
+    return <div style={{ padding: 16 }}>Loading...</div>
+  }
+
   if (!user) {
     return (
       <div style={{ padding: 16 }}>
-        <Button type="primary" onClick={() => window.open(`${process.env.PLASMO_PUBLIC_BASE_URL}/sign-in`)}>
+        <Button
+          type="primary"
+          onClick={() => window.open(`${process.env.PLASMO_PUBLIC_BASE_URL}/sign-in`)}>
           请先登录
         </Button>
       </div>
