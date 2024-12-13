@@ -1,29 +1,29 @@
-import { Button, Input, Space, message } from "antd"
+import { Button, Flex, Input, Space, Spin, message } from "antd"
 import Text from "antd/es/typography/Text"
 import { useEffect, useState } from "react"
 import type { PageInfo } from "~services/page"
 import { getPageInfo } from "~services/page"
 import type { User } from "~storage/auth"
 import { getUser } from "~storage/auth"
-
+import "./popup.css"
 function getAbsoluteUrl(url: URL, relativeUrl: string): string {
   if (!relativeUrl) return '';
-  
+
   // 如果已经是绝对路径，直接返回
   if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://')) {
     return relativeUrl;
   }
-  
+
   // 如果是以 // 开头的协议相对路径
   if (relativeUrl.startsWith('//')) {
     return url.protocol + relativeUrl;
   }
-  
+
   // 如果是以 / 开头的绝对路径
   if (relativeUrl.startsWith('/')) {
     return `${url.origin}${relativeUrl}`;
   }
-  
+
   // 处理相对路径
   return `${url.origin}/${relativeUrl}`;
 }
@@ -57,6 +57,7 @@ function IndexPopup() {
         url: domain,
         name: "__session"
       })
+      console.log(cookies)
 
       if (!cookies?.value) {
         window.open(`${domain}/sign-in`, "_blank")
@@ -75,79 +76,27 @@ function IndexPopup() {
     }
   }
 
-  const fetchPageInfo = async () => {
-    setLoading(true)
+  const quickSaveUrl = async (url: string) => {
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-
-      if (!tab.id) {
-        throw new Error("No tab id found")
-      }
-
-      if (!tab.url) {
-        throw new Error("No URL found")
-      }
-
-      // 检查是否是有效的 URL
-      if (!tab.url.startsWith('http')) {
-        throw new Error("Invalid URL protocol")
-      }
-
-      const info = await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        func: getPageInfo
-      })
-
-      
-      const pageData = info[0].result
-      const url = new URL(tab.url)
-      const pageInfo = {
-        ...pageData,
-        image: getAbsoluteUrl(url, pageData.image),
-        title: tab.title,
-        url: tab.url,
-        favicon: getAbsoluteUrl(url, tab.favIconUrl)
-      };
-      setPageInfo(pageInfo)
-      if (!saved) {
-        const res = await saveToBackend(pageInfo)
-        if (res) {
-          setSaved(true)
-        }
-      }
+      const response = await fetch(`${API_URL}/items`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${user.token}`
+        },
+        body: JSON.stringify({ item: { url } })
+      });
+      const data = await response.json();
+      setItemId(data.data.id);
+      message.success("URL saved successfully!");
+      return data.data.id;
     } catch (err) {
-      console.error("Error in fetchPageInfo:", err)
-      message.error(`获取页面信息失败: ${err.message}`)
-    } finally {
-      setLoading(false)
+      message.error("Failed to save URL");
+      throw err;
     }
   }
 
-  const saveToBackend = (data: PageInfo) => {
-    return fetch(`${API_URL}/items`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${user.token}`
-      },
-      body: JSON.stringify({ item: data })
-    })
-      .then(res => res.json())
-      .then(res => {
-        setItemId(res.data.id)
-        message.success("保存成功")
-        return true
-      })
-      .catch(err => {
-        message.error("保存失败")
-        return false
-      })
-
-  }
-
-  const handleUpdate = async () => {
-    if (!pageInfo || !user) return
-    setLoading(true)
+  const updateItemWithDetails = async (itemId: string, pageData: PageInfo) => {
     try {
       const response = await fetch(`${API_URL}/items`, {
         method: "PUT",
@@ -155,65 +104,118 @@ function IndexPopup() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${user.token}`
         },
-        body: JSON.stringify({ updatedData: pageInfo, id: itemId })
-      })
+        body: JSON.stringify({ updatedData: pageData, itemId })
+      });
 
-      if (response.ok) {
-        message.success("更新成功")
-      } else {
-        message.error("更新失败")
+      if (!response.ok) {
+        message.error("Failed to update page details");
       }
     } catch (err) {
-      message.error("更新失败")
+      console.error(err);
     }
-    setLoading(false)
   }
 
-  if (loading) {
-    return <div style={{ padding: 16 }}>Loading...</div>
+  const fetchPageInfo = async () => {
+    setLoading(true);
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+
+      if (!tab.id || !tab.url) {
+        throw new Error("Invalid tab or URL");
+      }
+
+      // Validate URL
+      if (!tab.url.startsWith('http')) {
+        throw new Error("Invalid URL protocol");
+      }
+
+      setPageInfo((prev) => ({
+        ...prev,
+        url: tab.url
+      }));
+
+      // Quick save URL first
+      const savedItemId = await quickSaveUrl(tab.url);
+
+      // Then asynchronously parse page details
+      const info = await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: getPageInfo
+      });
+
+      const pageData = info[0].result;
+      const url = new URL(tab.url);
+      const fullPageInfo = {
+        ...pageData,
+        image: getAbsoluteUrl(url, pageData.image),
+        title: tab.title,
+        url: tab.url,
+        favicon: getAbsoluteUrl(url, tab.favIconUrl)
+      };
+
+      setPageInfo(fullPageInfo);
+      setSaved(true);
+
+      // Update item with full details
+      await updateItemWithDetails(savedItemId, fullPageInfo);
+    } catch (err) {
+      console.error("Error in fetchPageInfo:", err);
+      message.error(`Failed to get page information: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const saveToBackend = (data: PageInfo) => {
+    return updateItemWithDetails(itemId, data)
+
+  }
+
+
 
   if (!user) {
     return (
-      <div style={{ padding: 16 }}>
+      <Flex justify="center" align="center" className="size-[400px] p-4">
         <Button
           type="primary"
           onClick={() => window.open(`${process.env.PLASMO_PUBLIC_BASE_URL}/sign-in`)}>
-          请先登录
+          Sign in
         </Button>
-      </div>
+      </Flex>
     )
   }
 
   return (
-    <div style={{ width: 400, padding: 16 }}>
-      <Space direction="vertical" style={{ width: "100%" }}>
-        {saved && <Text type="success">已成功收藏!</Text>}
-        {pageInfo?.image && (
-          <img src={pageInfo.image} style={{ maxWidth: "100%", height: 200, objectFit: "cover" }} />
-        )}
-        <div>
-          <div style={{ marginBottom: 8 }}>
-            <label>标题</label>
-            <Input
-              value={pageInfo?.title}
-              onChange={e => setPageInfo(prev => prev ? { ...prev, title: e.target.value } : prev)}
-            />
-          </div>
+    <Flex gap="middle" vertical className="w-[400px] p-4 rounded-md">
+      <Spin spinning={loading}>
+        <Space direction="vertical" style={{ width: "100%" }}>
+          {saved && <Text type="success">Successfully saved!</Text>}
+          {pageInfo?.image && (
+            <img src={pageInfo.image} style={{ maxWidth: "100%", height: 200, objectFit: "cover" }} />
+          )}
           <div>
-            <label>描述</label>
-            <Input.TextArea
-              value={pageInfo?.description}
-              rows={3}
-              onChange={e => setPageInfo(prev => prev ? { ...prev, description: e.target.value } : prev)}
-            />
+            <div style={{ marginBottom: 8 }}>
+              <label>Title</label>
+              <Input
+                value={pageInfo?.title}
+                onChange={e => setPageInfo(prev => prev ? { ...prev, title: e.target.value } : prev)}
+              />
+            </div>
+            <div>
+              <label>Description</label>
+              <Input.TextArea
+                value={pageInfo?.description}
+                rows={3}
+                onChange={e => setPageInfo(prev => prev ? { ...prev, description: e.target.value } : prev)}
+              />
+            </div>
           </div>
-        </div>
-        <Button type="primary" onClick={() => saveToBackend(pageInfo)} loading={loading}>
-          确定
-        </Button>
-      </Space>
-    </div>
+          <Button type="primary" onClick={() => saveToBackend(pageInfo)} loading={loading}>
+            Update
+          </Button>
+        </Space>
+      </Spin>
+    </Flex>
   )
 }
 
