@@ -10,11 +10,12 @@
     "package": "plasmo package"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.5.1",
+    "@nextui-org/react": "^2.6.8",
+    "@nextui-org/theme": "^2.4.3",
     "@plasmohq/messaging": "^0.6.2",
     "@plasmohq/storage": "^1.12.0",
-    "antd": "^5.21.6",
-    "plasmo": "0.89.3",
+    "framer-motion": "^11.15.0",
+    "plasmo": "0.89.4",
     "react": "18.2.0",
     "react-dom": "18.2.0"
   },
@@ -24,6 +25,9 @@
     "@types/node": "20.11.5",
     "@types/react": "18.2.48",
     "@types/react-dom": "18.2.18",
+    "@swc/core": "^1.3.96",
+    "@swc/helpers": "^0.5.3",
+    "@swc/types": "^0.1.5",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.49",
     "prettier": "3.2.4",

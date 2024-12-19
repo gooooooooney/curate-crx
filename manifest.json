@@ -2,11 +2,11 @@
   "permissions": [
     "cookies",
     "storage",
-    "tabs",
-    "scripting"
+    "scripting",
+    "activeTab"
   ],
   "host_permissions": [
-    "http://localhost:3000/*",
-    "https://*.clerk.com/*"
+    "https://*/*",
+    "http://*/*"
   ]
 } 

@@ -6,7 +6,8 @@
   "include": [
     ".plasmo/index.d.ts",
     "./**/*.ts",
-    "./**/*.tsx"
+    "./**/*.tsx",
+    "./**/*.css"
   ],
   "compilerOptions": {
     "paths": {
@@ -14,6 +15,11 @@
         "./*"
       ]
     },
+    "types": [
+      "chrome",
+      "@types/chrome",
+      "node"
+    ],
     "baseUrl": ".",
     "jsx": "react-jsx"
   }
